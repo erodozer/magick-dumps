@@ -1,9 +1,12 @@
-# magick_dumps
+# magick_dumps 🧙‍♂️
 
-Utility library integrating with the imagemagick runtime
-Functionality is in place specifically for providing a way of converting animated images such as gifs and webp to Godot compatible resources at runtime.
+Utility library integrating with the [imagemagick](https://imagemagick.org/) runtime.
 
-Originally created for the sake of providing support for rendering remote content from Twitch's API
+Current implemented functionality is specifically for providing a way of automating conversion of animated images, such as gifs and webp, directly to Godot compatible resources.
+
+This was originally reated for the sake of providing support for rendering remote content from Twitch's API at runtime for use in chatbox overlays.
+
+<img src="https://github.com/erodozer/magick-dumps/assets/316728/2086f12c-17d0-4513-b39e-95da7868efa8" height="350">
 
 ## Important
 
