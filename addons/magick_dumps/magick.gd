@@ -6,14 +6,19 @@ extends RefCounted
 ## Idumps it into a binary resource consisting of PNG frames.
 ##
 ## The resource is automatically added to the ResourceLoader cache as the input path value
-static func dump_and_convert(path: String, buffer: PackedByteArray = []) -> AnimatedTexture:
-	var folder_path = "user://.tmp_%d/" % Time.get_unix_time_from_system()
+static func dump_and_convert(path: String, buffer: PackedByteArray = [], output = "%s.res" % path) -> AnimatedTexture:
+	var folder_path
+	if Engine.is_editor_hint():
+		folder_path = "user://.tmp_%d/" % Time.get_unix_time_from_system()
+	else:
+		folder_path = "res://.tmp/magick_%d/" % Time.get_unix_time_from_system()
 	
 	# dump the buffer
 	if FileAccess.file_exists(path):
-		push_warning("File found at %s, loading it instead of using the buffer." % path)
+		print("File found at %s, loading it instead of using the buffer." % path)
 		buffer = FileAccess.get_file_as_bytes(path)
 	else:
+		print("No file found, attempting to read buffer")
 		var f = FileAccess.open(path, FileAccess.WRITE)
 		f.store_buffer(buffer)
 		f.close()
@@ -64,13 +69,15 @@ static func dump_and_convert(path: String, buffer: PackedByteArray = []) -> Anim
 	# delete the temp directory
 	OS.move_to_trash(ProjectSettings.globalize_path(folder_path))
 	
-	ResourceSaver.save(
+	var error = ResourceSaver.save(
 		tex,
-		path + ".res",
+		output,
 		ResourceSaver.SaverFlags.FLAG_COMPRESS
 	)
-	tex.take_over_path(path + ".res")
 	
-	print("animated image saved: %s" % path)
+	if error != OK:
+		push_warning(error)
+	
+	print("animated image saved: %s" % output)
 	
 	return tex
