@@ -80,4 +80,7 @@ static func dump_and_convert(path: String, buffer: PackedByteArray = [], output 
 	
 	print("animated image saved: %s" % output)
 	
+	if not Engine.is_editor_hint():
+		tex.take_over_path(output)
+	
 	return tex
