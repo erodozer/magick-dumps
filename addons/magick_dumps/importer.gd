@@ -1,15 +1,13 @@
 @tool
 extends EditorImportPlugin
 
-const processor = preload("./magick.gd")
-
 enum Presets { DEFAULT }
 
 func _get_importer_name():
 	return "erodozer.imagemagick"
 
 func _get_visible_name():
-	return "AnimatedTexture (Magick)"
+	return "AnimatedTexture (ImageMagick)"
 
 func _get_recognized_extensions():
 	return ["gif", "webp"]
@@ -39,5 +37,14 @@ func _get_option_visibility(path, option, options):
 	return true
 	
 func _import(source_file, save_path, options, r_platform_variants, r_gen_files):
-	processor.dump_and_convert(source_file, [], "%s.%s" % [save_path, _get_save_extension()])
+	var dumper = preload("./magick.gd").new()
+	
+	var tex = await dumper.dump_and_convert(source_file, [], "")
+	if tex:
+		return ResourceSaver.save(
+			tex,
+			"%s.%s" % [save_path, _get_save_extension()],
+			ResourceSaver.SaverFlags.FLAG_COMPRESS
+		)
+	push_error("failed to import %s" % source_file)
 	

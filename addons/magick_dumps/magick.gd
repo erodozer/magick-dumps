@@ -1,24 +1,68 @@
 extends RefCounted
 
+var converting = {}
+
 ## Converts a packed byte array to an AnimatedTexture and writes it out to the destination path
 ##
 ## The byte array must represent an animated gif, webp, or any imagemagick supported format
 ## Idumps it into a binary resource consisting of PNG frames.
 ##
 ## The resource is automatically added to the ResourceLoader cache as the input path value
-static func dump_and_convert(path: String, buffer: PackedByteArray = [], output = "%s.res" % path) -> AnimatedTexture:
+func dump_and_convert(path: String, buffer: PackedByteArray = [], output = "%s.res" % path, parallel = false) -> AnimatedTexture:
+	var thread = Thread.new()
+	
+	var mutex
+	if parallel:
+		mutex = converting.get(path, Mutex.new())
+		converting[output] = mutex
+	
+	var err = thread.start(_do_work.bind(path, buffer, output, mutex))
+	assert(err == OK, "could not start thread")
+	
+	# don't block the main thread while loading
+	while not thread.is_started() or thread.is_alive():
+		await Engine.get_main_loop().process_frame
+	
+	var tex = thread.wait_to_finish()
+	if parallel:
+		mutex.unlock()
+	
+	if not output.is_empty() and tex:
+		ResourceSaver.save(
+			tex,
+			output,
+			ResourceSaver.SaverFlags.FLAG_COMPRESS
+		)
+		tex.take_over_path(output)
+		
+	converting.erase(output)
+	
+	return tex
+
+func _do_work(path: String, buffer: PackedByteArray, output: String, mutex):
+	if mutex != null:
+		mutex.lock()
+		
+		# load from cache if another thread already completed converting this same resource
+		if not output.is_empty() and ResourceLoader.has_cached(output):
+			var tex = ResourceLoader.load(output)
+			return tex
+		
 	var folder_path
 	if Engine.is_editor_hint():
-		folder_path = "user://.tmp_%d/" % Time.get_unix_time_from_system()
+		folder_path = "res://.godot/magick_tmp/%d/" % Time.get_unix_time_from_system()
 	else:
-		folder_path = "res://.tmp/magick_%d/" % Time.get_unix_time_from_system()
+		var uniq = ""
+		for i in range(8):
+			uniq += "%d" % [randi() % 10]
+		
+		folder_path = "user://.magick_tmp/%s_%d/" % [uniq, Time.get_unix_time_from_system()]
 	
 	# dump the buffer
 	if FileAccess.file_exists(path):
 		print("File found at %s, loading it instead of using the buffer." % path)
 		buffer = FileAccess.get_file_as_bytes(path)
 	else:
-		print("No file found, attempting to read buffer")
 		var f = FileAccess.open(path, FileAccess.WRITE)
 		f.store_buffer(buffer)
 		f.close()
@@ -51,9 +95,11 @@ static func dump_and_convert(path: String, buffer: PackedByteArray = [], output 
 	if len(frames) == 0:
 		return null
 	
-	tex.frames = len(frames)
+	tex.frames = min(256, len(frames))
 	for filepath in frames:
 		var idx = filepath.substr(0, filepath.rfind(".")).to_int()
+		if idx > 255: # Animated Textures have a frame limit :(
+			continue
 		var delay = frame_delays[idx] / 1000.0
 	
 		var image = Image.new()
@@ -69,18 +115,5 @@ static func dump_and_convert(path: String, buffer: PackedByteArray = [], output 
 	# delete the temp directory
 	OS.move_to_trash(ProjectSettings.globalize_path(folder_path))
 	
-	var error = ResourceSaver.save(
-		tex,
-		output,
-		ResourceSaver.SaverFlags.FLAG_COMPRESS
-	)
-	
-	if error != OK:
-		push_warning(error)
-	
-	print("animated image saved: %s" % output)
-	
-	if not Engine.is_editor_hint():
-		tex.take_over_path(output)
-	
 	return tex
+	
